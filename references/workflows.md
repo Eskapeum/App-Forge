@@ -16,7 +16,8 @@ export const meta = {
   description: 'Architecture judge panel → phased build plan',
   phases: [{ title: 'Propose' }, { title: 'Judge' }, { title: 'Synthesize' }],
 }
-// args: { spec: "<full SPEC.md text>", agentTypes: ["designer", "test-engineer", ...] }  ← discovered registry (agent-routing.md §1)
+// args: { spec: "<full SPEC.md text>", agentTypes: ["designer", ...], brain: "<BRAIN rules filtered for this stack>" }
+// agentTypes = discovered registry (agent-routing.md §1) · brain = global learned rules (self-learning.md §3)
 const ANGLES = ['simplest-thing-that-ships', 'data-model-first', 'user-flow-first']
 const PROPOSAL = { type: 'object', required: ['stack', 'phases', 'risks'], properties: {
   stack: { type: 'string' }, risks: { type: 'array', items: { type: 'string' } },
@@ -29,6 +30,7 @@ phase('Propose')
 const proposals = (await parallel(ANGLES.map(a => () =>
   agent(`Propose an architecture + phased task plan for this spec, optimizing for "${a}".
 Every task MUST have a files: glob and a RUNNABLE verify: command. Small atomic tasks (≤1 file area each).
+Learned rules from past runs (honor them):\n${args.brain || 'none yet'}
 SPEC:\n${args.spec}`, { label: `propose:${a}`, phase: 'Propose', schema: PROPOSAL })))).filter(Boolean)
 phase('Judge')
 const scores = (await parallel(proposals.map((p, i) => () =>
@@ -57,6 +59,7 @@ export const meta = {
 }
 // args: { projectDir, tasks: [{id, text, files, verify, agent}], spec, lessons, runNotes, verifyAgent }
 // task.agent / verifyAgent = registry types resolved by the orchestrator (agent-routing.md §2-3); absent → default subagent
+// lessons = MERGED payload: global BRAIN rules (filtered by stack) + full project LESSONS.md (self-learning.md §3)
 const IMPL = { type: 'object', required: ['taskId', 'status', 'filesTouched', 'summary'], properties: {
   taskId: { type: 'string' }, status: { type: 'string', enum: ['done', 'failed'] },
   filesTouched: { type: 'array', items: { type: 'string' } }, summary: { type: 'string' },

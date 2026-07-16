@@ -1,5 +1,14 @@
 # App-Forge — Changelog
 
+## 0.4.0 — 2026-07-16
+
+Cross-run self-learning: the skill gets smarter with every use.
+
+- NEW references/self-learning.md + templates/BRAIN.template.md — two-tier memory: project `.forge/LESSONS.md` + global `~/.claude/app-forge/` (BRAIN.md deduped transferable rules with scope tags + hits counters; runs.jsonl telemetry; PROPOSALS.md human-reviewed skill-edit queue — the skill never edits itself mid-run).
+- **Retro at every stop** (termination AND breaker stops — failed runs teach the most): generalize-or-drop promotion, dedup/merge with rule-sharpening on repeat violations, 100-rule cap with hits-based pruning, learning delta in the final summary.
+- **Injection**: BRAIN filtered by stack feeds plan-forge (`args.brain`) and merges with project lessons into every implementer/verifier prompt; fix passes check the BRAIN for known failure modes first.
+- SKILL.md: Hard rule 6 → two tiers; BRAIN load at bootstrap; retro steps in termination; +2 Common mistakes. README: self-learning section.
+
 ## 0.3.0 — 2026-07-16
 
 Loop-engineering hardening (the five-beats discipline) + MIT license.

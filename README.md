@@ -44,6 +44,10 @@ And the honest inverse — **when not to loop**: one-off tasks (a prompt is fast
 - **Circuit breaker.** 3 cycles without progress, the same error 3×, an iteration cap, and an optional token budget all stop the loop gracefully — with a `RESUME.md` explaining exactly where it stands.
 - **One gate, then autonomy.** After plan approval it never blocks on you; if genuinely stuck it stops cleanly instead of waiting. Deploys only happen if you explicitly asked.
 
+## Self-learning: better with every use
+
+App-Forge keeps two memories. Inside a project, `.forge/LESSONS.md` captures every failure → cause → rule and injects it into every agent. Across projects, a global **BRAIN** (`~/.claude/app-forge/BRAIN.md`) holds only the *transferable* rules — stack gotchas, batching traps, verification blind spots — each tagged by scope and scored by how often it recurs. Every run ends with a retro (including failed runs — they teach the most): telemetry to `runs.jsonl`, transferable lessons promoted or sharpened in the BRAIN, and defects in the skill itself queued as human-reviewed proposals rather than silent self-edits. The BRAIN is capped and pruned — the goal is a falling mistake rate, not a growing list — and run #10 plans, batches, and verifies measurably smarter than run #1.
+
 ## Agent-ecosystem routing (v0.2.0)
 
 App-Forge discovers the specialist agents available in *your* session (designer, test-engineer, code-reviewer, security-reviewer, debugger, executor, plugin agents…) and routes each task to the best fit — UI to designers, tests to test engineers, review lenses to reviewers. Missing specialists degrade gracefully to default agents; nothing hard-depends on a specific registry. Skill-owned commands (deploys, eval harnesses) can run as plan phases with their output as verify evidence.

@@ -75,6 +75,8 @@ One entry per cycle, appended, never edited. RED entries record the failing comm
 
 Same discipline as a project lessons file: after any failure or correction, append *what went wrong + the rule that prevents a repeat*. The full file is injected into every implementer and verifier prompt, so keep entries short and rule-shaped. Prune duplicates when appending.
 
+This is the **project tier** only. The **global tier** — `~/.claude/app-forge/` (BRAIN.md rules, runs.jsonl telemetry, PROPOSALS.md skill-edit queue) — lives outside both the project and the skill install; the retro promotes transferable lessons there at every stop (references/self-learning.md).
+
 ## RESUME.md
 
 Written at bootstrap, updated at every stop. Contents: project path, current status one-liner, and the exact continuation command (`/app-forge <dir>`), plus anything a fresh context must know that isn't derivable from the other files (e.g. "dev server needs Node 22", "user wants no deploy"). Keep under a screen.

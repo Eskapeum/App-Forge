@@ -39,14 +39,14 @@ Detection rule: target has `.forge/STATE.json` → run mode; else bootstrap. Rea
 3. **One human gate.** Plan approval at bootstrap. After it, never block on the user — if genuinely stuck, STOP cleanly (RESUME.md + summary). Stopping well beats waiting.
 4. **Green checkpoints only.** Commit only when the batch verifies green. Never commit red "to save progress".
 5. **Manifest lockdown.** Subagents never touch package.json / lockfiles / shared config / generated files. The orchestrator pre-installs deps and makes shared edits before fan-out.
-6. **Lessons loop.** Every failure → cause → rule appended to `.forge/LESSONS.md`; inject its content into every agent prompt.
+6. **Lessons loop — two tiers.** Every failure → cause → rule in `.forge/LESSONS.md` (project tier), injected into every agent prompt together with the filtered global BRAIN (`~/.claude/app-forge/BRAIN.md`). Every run ends with a retro that promotes transferable rules into the BRAIN — the skill gets smarter with every use (references/self-learning.md).
 7. **Stop conditions win.** Circuit breaker / iteration cap / budget → graceful stop. Never a runaway loop.
 
 ## Bootstrap (iteration 0)
 
 1. Distill the idea (or read the given spec file) → write `.forge/SPEC.md` from templates/SPEC.template.md — goals, non-goals, stack (one-line justification), and **acceptance criteria: each one a runnable command or observable browser check** (references/verification.md §1). **The bar rule:** every goal gets a bar the loop can measure; a vague idea is sharpened here (or asked about at the gate) — never looped as-is.
-2. **Discover the agent registry** (references/agent-routing.md §1): map task kinds → the specialist agent types actually available this session; store in STATE.json `agents`.
-3. Run the **plan-forge Workflow** (references/workflows.md §1) with the discovered `agentTypes`: 3 independent architecture+phasing proposals → judge panel → synthesis (tasks come back with `agent:` hints).
+2. **Discover the agent registry** (references/agent-routing.md §1): map task kinds → the specialist agent types actually available this session; store in STATE.json `agents`. **Load the BRAIN**: read `~/.claude/app-forge/BRAIN.md` (if present), filter rules for this stack (references/self-learning.md §3).
+3. Run the **plan-forge Workflow** (references/workflows.md §1) with the discovered `agentTypes` + filtered `brain` rules: 3 independent architecture+phasing proposals → judge panel → synthesis (tasks come back with `agent:` hints).
 4. Write `.forge/PLAN.md` from templates/PLAN.template.md: phases → atomic tasks, each annotated `files:` `needs:` `verify:` (+ optional `agent:`, validated against the registry).
 5. **THE GATE:** present SPEC + PLAN via AskUserQuestion (approve / tweak / re-plan). If the dialog is unavailable or dismissed, end the turn asking for approval in chat — bootstrap is the one place waiting is correct.
 6. On approval: `git init` if needed → commit `forge: bootstrap — spec + plan` → write STATE.json (templates/STATE.template.json), RESUME.md, empty JOURNAL.md + LESSONS.md → enter run mode immediately. (**watch mode:** run cycle 1 in-turn, narrating each step as it happens; go autonomous from cycle 2.)
@@ -71,8 +71,9 @@ Full mechanics: references/iteration-engine.md. The shape:
 
 1. Execute EVERY acceptance criterion in SPEC.md; log command + result as evidence in JOURNAL.md. Any failure → back to run mode with fix tasks (still bounded by the breaker).
 2. **review-gate Workflow** (references/workflows.md §3): adversarial finders loop-until-dry; majority-refute verification; surviving findings become one final fix batch.
-3. All green → final commit + `git tag forge-shipped` → STATE `status: "done"` → update RESUME.md → `ScheduleWakeup {stop: true}` → final summary (what shipped, evidence table, how to run it) + PushNotification if available.
-4. Blocked stop instead: STATE `status: "stopped"` + `stopReason`; RESUME.md tells the next context exactly where it stands and how to continue.
+3. **Retro — harvest the learning** (references/self-learning.md §4): run record → `runs.jsonl`; transferable lessons promoted/merged into the global BRAIN (generalize-or-drop, dedup, hits, prune); skill-defect findings → `PROPOSALS.md` (never edit the skill itself mid-run).
+4. All green → final commit + `git tag forge-shipped` → STATE `status: "done"` → update RESUME.md → `ScheduleWakeup {stop: true}` → final summary (what shipped, evidence table, how to run it, learning delta) + PushNotification if available.
+5. Blocked stop instead: **retro still runs** (failed runs teach the most) → STATE `status: "stopped"` + `stopReason`; RESUME.md tells the next context exactly where it stands and how to continue.
 
 ## Circuit breaker
 
@@ -94,6 +95,7 @@ Full mechanics: references/iteration-engine.md. The shape:
 | references/iteration-engine.md | Run mode — every cycle |
 | references/workflows.md | Launching any Workflow |
 | references/agent-routing.md | Bootstrap discovery; resolving who does each task |
+| references/self-learning.md | Bootstrap BRAIN load; every retro (termination AND breaker stop) |
 | references/verification.md | Writing acceptance criteria; verifying; terminating |
 
 ## Common mistakes
@@ -109,3 +111,5 @@ Full mechanics: references/iteration-engine.md. The shape:
 | A task with no `verify:` command | Unverifiable = unplannable; fix the PLAN first |
 | Hardcoding an agent type the session doesn't have | Discover + fall back (agent-routing.md §1) |
 | Routing an implement task to a read-only advisor agent | Check tool grants; advisors judge, executors build (agent-routing.md §3) |
+| Skipping the retro on a breaker stop | Failed runs teach the most — retro runs on EVERY stop (self-learning.md §4) |
+| Promoting project trivia to the BRAIN | Generalize-or-drop; falsifiable rules only (self-learning.md §5) |

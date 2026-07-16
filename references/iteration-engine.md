@@ -4,7 +4,7 @@ The loop has two wake sources: **background-Workflow completion** (primary — t
 
 ## 1 · Read state (always, first)
 
-Read `.forge/STATE.json`, PLAN.md (parse unchecked + blocked tasks), LESSONS.md, last ~3 JOURNAL.md entries. Then gate:
+Read `.forge/STATE.json`, PLAN.md (parse unchecked + blocked tasks), LESSONS.md, last ~3 JOURNAL.md entries, and the global BRAIN (`~/.claude/app-forge/BRAIN.md`, filtered by stack — self-learning.md §3). Then gate:
 
 - `status` is `done` or `stopped` → report and end (no wakeup).
 - Breaker tripped (see §6) → termination-by-stop: write stopReason, RESUME.md, summary, `ScheduleWakeup {stop:true}`.
@@ -37,7 +37,7 @@ Subagents are locked out of shared files (Hard rule 5), so do their shared groun
 - Create/modify shared config, schema files, route registries, barrel exports the tasks will need.
 - Commit if anything changed: `forge: i<N> pre — deps/config for <task ids>`.
 
-Then launch the **build-iteration Workflow in the background** with: the batch (id, text, files, verify per task), a SPEC excerpt (goals + relevant ACs), LESSONS.md content, and the stack facts agents need (run commands, test runner). Write `activeWorkflowRunId` to STATE.json. Schedule the fallback heartbeat (prompt `/app-forge <dir>`, delay `heartbeatSeconds`, reason names the project + iteration). **End the turn.** Do not busy-wait, do not schedule short polls — completion re-invokes you.
+Then launch the **build-iteration Workflow in the background** with: the batch (id, text, files, verify per task), a SPEC excerpt (goals + relevant ACs), the merged lesson payload (filtered global BRAIN rules + full project LESSONS.md), and the stack facts agents need (run commands, test runner). Write `activeWorkflowRunId` to STATE.json. Schedule the fallback heartbeat (prompt `/app-forge <dir>`, delay `heartbeatSeconds`, reason names the project + iteration). **End the turn.** Do not busy-wait, do not schedule short polls — completion re-invokes you.
 
 ## 5 · Process results (the orchestrator verifies)
 
