@@ -35,7 +35,8 @@ Classification is by task annotation first (`agent:` in PLAN, §4), then by `fil
 
 - **Workflow scripts**: pass `agentType` per `agent()` call — `agent(prompt, { agentType: t.agent, schema: IMPL })`. Composes with schemas (structured output still enforced). Read-only advisors (`architect`, `critic`, `code-reviewer`) are legal for propose/judge/verify stages but never for implement stages — check the type's tool grants in the listing before routing an implementation task to it.
 - **Degraded mode (Agent tool)**: same map via `subagent_type`.
-- **Model overrides**: leave `model` unset (inherit) unless the agent definition already pins one. Routing picks *who*, not *how expensive*.
+- **Model overrides**: leave `model` unset (inherit) unless the agent definition already pins one. Routing picks *who*, not *how expensive*. **One sanctioned exception** — the highest-judgment stages (plan-forge judges/synthesis, review-gate refuters, the goal check when delegated) MAY pin `model` to the strongest available tier (e.g. `'fable'`) when the session model is weaker or a routed agent definition pins lower; the loop's judgment should never be its cheapest component.
+- **`agent: orchestrator` sentinel**: not a registry type — it means the orchestrator executes the task inline, never fanning out (scaffold, manifest-creating, shared-config tasks). Validated separately from registry discovery.
 
 ## §4 PLAN grammar extension
 

@@ -48,8 +48,9 @@ Runs at EVERY termination **and every breaker stop** (failed runs teach the most
    - Same failure mode already in BRAIN (same scope + same symptom) → `hits++`. **A rule that was injected and STILL got violated is a badly written rule** — rewrite it sharper on the spot (the violation shows what it failed to prevent).
    - New → append with the next `R###` id.
 4. Skill-defect lessons (a hard rule that misfired, a workflow shape that hangs, a template gap) → dated entry in `PROPOSALS.md` (what happened · why the skill is at fault · the suggested edit). **Never edit the installed skill mid-run** — it's versioned and mirrored; humans apply proposals.
-5. Prune while writing: BRAIN.md hard cap 100 rules — drop lowest-hits oldest first; a stale low-hit rule is noise that dilutes every future injection.
-6. Final summary reports the learning delta: "N rules added, M sharpened, K proposals pending review."
+5. **Contradiction check** before appending: scan same-scope rules for direct conflicts with the new one (opposite imperatives about the same situation). Keep the sharper/newer rule; if genuinely irreconcilable (both true in different contexts), split the scopes or narrow the wording — and if the conflict implicates the skill's own doctrine, log it in PROPOSALS.md. Two contradictory rules injected into one prompt are worse than none.
+6. Prune while writing: BRAIN.md hard cap 100 rules — drop lowest-hits oldest first; a stale low-hit rule is noise that dilutes every future injection.
+7. Final summary reports the learning delta: "N rules added, M sharpened, K proposals pending review."
 
 ## §5 Honesty rules
 

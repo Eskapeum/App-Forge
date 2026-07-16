@@ -17,7 +17,7 @@ Everything the loop knows lives on disk in the target project. Any fresh context
 ## PLAN.md task grammar
 
 ```markdown
-## P2 — Core data layer   [phase-verify: npm test]
+## P2 — Core data layer   [phase-verify: `npm test`]
 - [ ] P2.1 SQLite schema + migrations · files: src/db/** · verify: `npm test -- db`
 - [ ] P2.2 CRUD API routes · files: src/api/** · needs: P2.1 · verify: `npm test -- api`
 - [x] P2.3 Seed script · files: scripts/seed.ts · needs: P2.1 · verify: `npm run seed && npm test -- seed`
@@ -26,10 +26,13 @@ Everything the loop knows lives on disk in the target project. Any fresh context
 
 Rules:
 - Every task has a stable id (`P<phase>.<n>`), a `files:` glob (drives disjoint batching), optional `needs:` (task ids), optional `agent:` (specialist routing hint, see agent-routing.md §4), and a **runnable** `verify:` command. A task without `verify:` is invalid — fix the plan before executing it.
+- **Task `verify:` commands must be FILE-SCOPED** (a runner filter like `npm test -- db`, not the global build/suite) — parallel agents share one working tree; global checks are orchestrator-only, post-batch (iteration-engine.md §5). The global commands live in `[phase-verify:]` and the SPEC's ACs.
+- `agent: orchestrator` is a reserved sentinel: the task never fans out — the orchestrator executes it inline (scaffold, manifest-creating, shared-config tasks; Hard rule 5's other half).
+- **Parsing:** a field starts at ` · ` immediately followed by a known keyword (`files:`, `needs:`, `agent:`, `verify:`). A bare ` · ` inside free text is NOT a field boundary. Commands inside `[phase-verify: …]` are backtick-delimited so `]` in a command can't close the bracket early.
 - `[blocked: <signature>]` suffix marks circuit-broken tasks. Blocked ≠ checked.
 - `[gap]` prefix in the task text marks tasks inserted by the goal check (iteration-engine.md §5a) — same grammar, selected first.
 - Checking off a task is done ONLY by the orchestrator after ITS OWN verification passes (Hard rule 2).
-- Phases carry a `[phase-verify: <command>]` run when the last task of the phase goes green, plus browser smoke for web apps.
+- Phases carry a `` [phase-verify: `<command>`] `` run when the last task of the phase goes green, plus browser smoke for web apps.
 
 ## STATE.json schema
 
@@ -85,8 +88,10 @@ Written at bootstrap, updated at every stop. Contents: project path, current sta
 
 - Checkpoint per green cycle: `forge: i<N> — <task ids> [green]`.
 - Bootstrap commit: `forge: bootstrap — spec + plan`.
-- Termination: `git tag forge-shipped`.
-- Never commit red (Hard rule 4). Never rewrite history; the checkpoint chain is the recovery ladder — a broken tree recovers with `git reset --hard <lastCheckpoint>` and a journal note.
+- Termination: `git tag forge-shipped-<YYYY-MM-DD>` (date-suffixed; same-day re-ship appends `-2` — never a bare colliding tag).
+- Never commit red (Hard rule 4). Never rewrite history; the checkpoint chain is the recovery ladder — a broken tree recovers with the **journal-preserving reset** below.
+
+**Journal-preserving reset** (JOURNAL.md lives inside the repo, so a bare `git reset --hard` would destroy every entry appended since the checkpoint): copy `.forge/JOURNAL.md` aside → `git reset --hard <checkpoint>` → re-append the saved entries plus a reset-event entry. The "append-only" invariant survives the reset.
 
 ## Recovery matrix
 
@@ -96,5 +101,5 @@ Written at bootstrap, updated at every stop. Contents: project path, current sta
 | Context was summarized mid-run | Hard rule 1 — every turn re-reads `.forge/`; trust files over memory |
 | Workflow hung (heartbeat fired, runId still active) | Check task status → TaskStop → relaunch batch, or `resumeFromRunId` |
 | Workflow finished but results lost | Re-read its journal (`<transcriptDir>/journal.jsonl`) before assuming; else relaunch the batch — verification makes relaunch idempotent |
-| Working tree broken / red beyond fixing | `git reset --hard <lastCheckpoint>`, journal it, `consecutiveNoProgress++` |
-| STATE.json corrupt | Rebuild from PLAN.md checkboxes + `git log` (iteration = checkpoint count); journal the rebuild |
+| Working tree broken / red beyond fixing | journal-preserving reset to `<lastCheckpoint>` (above), `consecutiveNoProgress++` |
+| STATE.json corrupt | Rebuild from PLAN.md checkboxes + `git log` — iteration = count of commits matching `forge: i* … [green]` ONLY (pre-fan-out `forge: i<N> pre` commits don't count); journal the rebuild |

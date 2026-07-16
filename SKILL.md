@@ -22,7 +22,8 @@ One invocation → SPEC → PLAN → **one approval** → autonomous iterations 
 | `/app-forge "<idea>" in <dir> watch` | Bootstrap, then run **cycle 1 foreground-narrated** (trust-building); autonomous from cycle 2 |
 | `/app-forge <dir>` | **Run** — continue the loop (`.forge/STATE.json` exists) |
 | `/app-forge status <dir>` | Report state + journal tail; do no work |
-| `/app-forge stop <dir>` | Graceful stop → update RESUME.md, `ScheduleWakeup {stop:true}` |
+| `/app-forge stop <dir>` | Graceful stop: **TaskStop the active workflow** (if `activeWorkflowRunId` set) → clear it → STATE `status:"stopped"` + `stopReason:"user stop"` → update RESUME.md → `ScheduleWakeup {stop:true}` |
+| `/app-forge rollback <dir> [sha]` | Journal-preserving reset to `lastCheckpoint` (or the given checkpoint) — PLAN checkboxes restore atomically with the tree (state-contract.md recovery matrix) |
 
 Detection rule: target has `.forge/STATE.json` → run mode; else bootstrap. Read references/state-contract.md before any read/write of `.forge/`.
 
@@ -44,12 +45,12 @@ Detection rule: target has `.forge/STATE.json` → run mode; else bootstrap. Rea
 
 ## Bootstrap (iteration 0)
 
-1. Distill the idea (or read the given spec file) → write `.forge/SPEC.md` from templates/SPEC.template.md — goals, non-goals, stack (one-line justification), and **acceptance criteria: each one a runnable command or observable browser check** (references/verification.md §1). **The bar rule:** every goal gets a bar the loop can measure; a vague idea is sharpened here (or asked about at the gate) — never looped as-is.
+1. Distill the idea (or read the given spec file) → write `.forge/SPEC.md` from templates/SPEC.template.md — goals, non-goals, stack (one-line justification), and **acceptance criteria: each one a runnable command or observable browser check** (references/verification.md §1). **The bar rule:** every goal gets a bar the loop can measure; a vague idea is sharpened here (or asked about at the gate) — never looped as-is. Then **preflight the toolchain** (node/git/package manager versions for the chosen stack) so missing pieces surface at the gate, not in cycle 1.
 2. **Discover the agent registry** (references/agent-routing.md §1): map task kinds → the specialist agent types actually available this session; store in STATE.json `agents`. **Load the BRAIN**: read `~/.claude/app-forge/BRAIN.md` (if present), filter rules for this stack (references/self-learning.md §3).
 3. Run the **plan-forge Workflow** (references/workflows.md §1) with the discovered `agentTypes` + filtered `brain` rules: 3 independent architecture+phasing proposals → judge panel → synthesis (tasks come back with `agent:` hints).
 4. Write `.forge/PLAN.md` from templates/PLAN.template.md: phases → atomic tasks, each annotated `files:` `needs:` `verify:` (+ optional `agent:`, validated against the registry).
-5. **THE GATE:** present SPEC + PLAN via AskUserQuestion (approve / tweak / re-plan). If the dialog is unavailable or dismissed, end the turn asking for approval in chat — bootstrap is the one place waiting is correct.
-6. On approval: `git init` if needed → commit `forge: bootstrap — spec + plan` → write STATE.json (templates/STATE.template.json), RESUME.md, empty JOURNAL.md + LESSONS.md → enter run mode immediately. (**watch mode:** run cycle 1 in-turn, narrating each step as it happens; go autonomous from cycle 2.)
+5. **THE GATE:** present, in this order: (a) the **acceptance criteria first, with an explicit invitation to challenge them** — the model wrote bars it knows it can pass, and this gate is the only defense; (b) the plan; (c) a **cost estimate** (`tasks × ~3 agent calls + verification ≈ N invocations`) and the preflight results. Then AskUserQuestion (approve / tweak / re-plan). If the dialog is unavailable or dismissed, end the turn asking for approval in chat — bootstrap is the one place waiting is correct.
+6. On approval: `git init` if needed → commit `forge: bootstrap — spec + plan` → write STATE.json (templates/STATE.template.json), RESUME.md, empty JOURNAL.md + LESSONS.md → enter run mode immediately. (**watch mode:** launch cycle 1, narrate each step as its notifications arrive, and do not schedule cycle 2 until the user has seen the green checkpoint.)
 
 ## Run mode — one wake = one cycle
 
@@ -67,12 +68,21 @@ Full mechanics: references/iteration-engine.md. The shape:
 8. **Goal check — the second look**: after a green cycle, step back from tasks to the SPEC: *are we at the goal yet? What's the single biggest gap?* Record it as `goalGap` in STATE.json + the journal. A real gap no remaining task covers becomes a new `[gap]` task in PLAN.md (same grammar, needs a `verify:`). This beat steers the loop — checking tasks proves work; checking the goal aims it.
 9. **Loop or terminate**: unchecked tasks remain and breaker is clear → step 3 in the SAME turn (gap tasks first). All tasks done (or only blocked ones left) and `goalGap` empty → termination sequence.
 
+## Mid-run messages (the user WILL talk to a running loop)
+
+A user message that isn't an `/app-forge` command, arriving while `status:"running"`, gets ROUTED — never treated as a normal coding request against files a workflow may be editing:
+
+- **Question** ("what's happening?") → answer as `/app-forge status`: state, current batch, last checkpoint. No work.
+- **Small steer** ("make the header blue") → append a `[gap]` task to PLAN.md (full grammar, `verify:` required), acknowledge, let the loop pick it up next cycle.
+- **Scope change** ("switch to Postgres", "also add auth") → pause: TaskStop the active workflow → update SPEC.md + PLAN.md (rerun plan-forge if structural) → **re-gate** (one new approval) → resume.
+- **Never** hand-edit project files in direct response to a mid-run message while a workflow is in flight — two writers, one tree.
+
 ## Termination — the proof, not the vibe
 
 1. Execute EVERY acceptance criterion in SPEC.md; log command + result as evidence in JOURNAL.md. Any failure → back to run mode with fix tasks (still bounded by the breaker).
 2. **review-gate Workflow** (references/workflows.md §3): adversarial finders loop-until-dry; majority-refute verification; surviving findings become one final fix batch.
 3. **Retro — harvest the learning** (references/self-learning.md §4): run record → `runs.jsonl`; transferable lessons promoted/merged into the global BRAIN (generalize-or-drop, dedup, hits, prune); skill-defect findings → `PROPOSALS.md` (never edit the skill itself mid-run).
-4. All green → final commit + `git tag forge-shipped` → STATE `status: "done"` → update RESUME.md → `ScheduleWakeup {stop: true}` → final summary (what shipped, evidence table, how to run it, learning delta) + PushNotification if available.
+4. All green → final commit + `git tag forge-shipped-<YYYY-MM-DD>` (date-suffixed — re-runs on the same project don't collide; same-day re-ship appends `-2`) → STATE `status: "done"` → update RESUME.md → `ScheduleWakeup {stop: true}` → final summary (what shipped, evidence table, how to run it, learning delta, any unverified review-gate flags) + PushNotification if available.
 5. Blocked stop instead: **retro still runs** (failed runs teach the most) → STATE `status: "stopped"` + `stopReason`; RESUME.md tells the next context exactly where it stands and how to continue.
 
 ## Circuit breaker
@@ -113,3 +123,5 @@ Full mechanics: references/iteration-engine.md. The shape:
 | Routing an implement task to a read-only advisor agent | Check tool grants; advisors judge, executors build (agent-routing.md §3) |
 | Skipping the retro on a breaker stop | Failed runs teach the most — retro runs on EVERY stop (self-learning.md §4) |
 | Promoting project trivia to the BRAIN | Generalize-or-drop; falsifiable rules only (self-learning.md §5) |
+| Global build/suite inside a parallel implementer | File-scoped checks only; the orchestrator builds once, post-batch (iteration-engine §5) |
+| Treating a crashed agent as a red implementation | Partition results; requeue agent-errored, commit the green subset (iteration-engine §5) |

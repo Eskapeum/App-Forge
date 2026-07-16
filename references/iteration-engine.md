@@ -14,7 +14,7 @@ Read `.forge/STATE.json`, PLAN.md (parse unchecked + blocked tasks), LESSONS.md,
 
 If `activeWorkflowRunId` is set, the previous cycle's orchestration may still be out:
 
-- **Still running** (TaskList/notifications say so) → do nothing else: reschedule the heartbeat (`heartbeatSeconds`), end turn.
+- **Still running** (TaskList/notifications say so) → do nothing else: reschedule the heartbeat (`heartbeatSeconds`), end turn. (ScheduleWakeup keeps ONE pending wakeup — scheduling replaces the prior one, so heartbeats don't stack. A stale heartbeat that fires after the loop already advanced is harmless: this engine is state-idempotent — it re-reads disk and the `activeWorkflowRunId` guard prevents double-launch.)
 - **Completed** → process its results (§5).
 - **Hung/dead** (no progress since last heartbeat, or task errored) → `TaskStop` it, journal the event, then either `Workflow {scriptPath, resumeFromRunId}` (cached prefix re-used) or relaunch the batch fresh. Count a hang as `consecutiveNoProgress++`.
 
@@ -24,8 +24,11 @@ From the current phase's unchecked, unblocked tasks (`[gap]` tasks first — the
 
 1. Filter to tasks whose `needs:` are all checked.
 2. Greedily take up to `batchSize` tasks whose `files:` globs are **pairwise disjoint** (string-prefix comparison on the glob roots is enough — `src/db/**` vs `src/api/**` is disjoint; anything ambiguous is NOT disjoint).
-3. Nothing selectable but unchecked tasks remain → the plan has a dependency knot or everything overlaps: take the single next task alone (batch of 1 is always legal).
-4. No unchecked tasks at all → termination sequence (SKILL.md).
+3. Nothing selectable but unchecked tasks remain — distinguish WHY before falling back:
+   - **Blocked by file overlap only** (needs all met, globs collide) → take the single next task alone (batch of 1 is always legal).
+   - **Blocked by unmet `needs:`** → NEVER run a task whose needs aren't checked. Walk each unchecked task's `needs:` chain: if every chain terminates at a `[blocked:]` task or a cycle, that's a **dependency deadlock** — stop immediately with `stopReason: "dependency deadlock — remaining tasks depend on: <blocked ids / cycle>"` instead of burning three doomed cycles.
+4. Tasks marked `agent: orchestrator` (scaffold, manifest-creating, shared-config tasks) never fan out — execute them inline yourself as part of §4, then continue selection.
+5. No unchecked tasks at all → termination sequence (SKILL.md).
 
 Batch size 1 is normal near phase ends. Parallelism is a bonus, not a goal — correctness of the disjointness rule is what keeps a shared working tree safe. If two tasks genuinely must touch the same files concurrently, don't parallelize them; serialize across cycles. Escalate to worktree isolation (`isolation: 'worktree'` per agent) only when a batch is large AND overlap is unavoidable — merging worktrees is the orchestrator's job and costs more than serializing in most cases.
 
@@ -41,10 +44,16 @@ Then launch the **build-iteration Workflow in the background** with: the batch (
 
 ## 5 · Process results (the orchestrator verifies)
 
-Workflow results are **claims**. Verify in this order, yourself, via Bash:
+**First, partition the results** (agents crash; a crash is not a failed implementation):
+
+- Diff the launched batch's task ids against `results[].impl.taskId`. Missing entry or `impl: null` → **agent-errored**: requeue the task (stays unchecked, no fix pass, no error signature — it never ran). Journal it; the same task agent-erroring twice in a row → treat as red for breaker purposes.
+- `impl.status === 'failed'` or a failing verdict → red claims. The rest → green claims.
+- **Commit the green subset**: a 3-green/1-errored batch checks off and checkpoints the 3 — never fail a batch wholesale for one crash.
+
+Then verify the green claims — in this order, yourself, via Bash. Note: implementer/verifier agents ran only file-scoped checks (they share one tree); **this is the first global verification**:
 
 1. Per-task `verify:` commands for the batch.
-2. Project build (`npm run build` or stack equivalent).
+2. Project build (`npm run build` or stack equivalent) — orchestrator-only, once per batch, after all agents have landed.
 3. Phase boundary crossed? → `[phase-verify:]` command + full test suite + browser smoke for web apps (verification.md §3).
 
 **All green:**
@@ -64,7 +73,7 @@ Tasks proving green tells you the work is *correct*; it doesn't tell you the loo
 
 **Red:**
 - ONE bounded fix pass: small/obvious → fix inline; multi-file → a fix workflow (build-iteration with a single synthesized fix task). Re-verify.
-- Still red → journal RED with the failing output head; normalize it to an error signature; `errorSignatures[sig]++`; `consecutiveNoProgress++`; signature at 3 → mark the offending task `[blocked: <sig>]` in PLAN.md and append a LESSONS entry. Reset the working tree to `lastCheckpoint` if the failure left it broken.
+- Still red → journal RED with the failing output head; normalize it to an error signature — **signature = error class + first message line, with file paths, line numbers, timestamps, and hex addresses stripped; lowercase; ≤80 chars** (loose enough to match reworded paths, tight enough not to conflate distinct errors); `errorSignatures[sig]++`; `consecutiveNoProgress++`; signature at 3 → mark the offending task `[blocked: <sig>]` in PLAN.md and append a LESSONS entry. Reset the working tree to `lastCheckpoint` if the failure left it broken (journal-preserving reset — state-contract.md recovery matrix).
 
 ## 6 · Continue, stop, or finish
 

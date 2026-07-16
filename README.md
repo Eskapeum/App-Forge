@@ -68,7 +68,10 @@ Restart Claude Code (or start a new session) — `/app-forge` appears in your sk
 | `/app-forge "<idea>" in <dir> watch` | Same, but cycle 1 runs narrated in front of you — trust it first, then it goes autonomous |
 | `/app-forge <dir>` | Continue/resume the loop (any session, any time) |
 | `/app-forge status <dir>` | Where it stands — no work performed |
-| `/app-forge stop <dir>` | Graceful stop with resume instructions |
+| `/app-forge stop <dir>` | Graceful stop (halts the in-flight orchestration too) with resume instructions |
+| `/app-forge rollback <dir> [sha]` | Journal-preserving reset to the last (or a given) green checkpoint |
+
+You can also just *talk* to a running loop: questions get a status answer, small steers become plan tasks, scope changes pause + re-gate. See a full worked run in [examples/EXAMPLE-RUN.md](examples/EXAMPLE-RUN.md).
 
 ## Requirements
 

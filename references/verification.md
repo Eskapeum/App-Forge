@@ -29,9 +29,11 @@ The orchestrator re-runs everything that matters (Hard rule 2). Subagent layers 
 
 | Moment | Checks (orchestrator, via Bash / preview pane) |
 |---|---|
-| Every cycle | batch `verify:` commands + project build |
+| Every cycle | batch `verify:` commands + project build — the FIRST global check; agents ran file-scoped only |
 | Phase boundary | + `[phase-verify:]` + full test suite + browser smoke (web) |
 | Termination | + EVERY AC executed, evidence journaled + review-gate workflow |
+
+Agents inside a batch never run the global build or full suite — they share one working tree and would compile each other's half-written code. File-scoped checks in agents; global checks here, once, post-batch.
 
 **Browser smoke recipe (web apps):** `preview_start` (dev server from `.claude/launch.json` — create it if missing) → `navigate` to the app → `read_page` asserts core text/controls exist → drive ONE core flow (the SPEC's main verb: create the thing, see the thing) → `read_console_messages {onlyErrors:true}` must be empty of new errors → screenshot for the journal. Kill the server after. CLI apps: run the binary against a golden input; APIs: curl the health + one core endpoint.
 
@@ -50,8 +52,8 @@ If you can't paste what a check printed, you didn't run it.
 ## §5 Termination checklist (all YES before "shipped")
 
 1. Every PLAN task checked or explicitly `[blocked:]` (blocked list appears in the summary — never silently dropped).
-2. Every AC executed THIS session-day with journaled evidence — no "passed earlier". STATE `goalGap` is empty (the goal check agrees the SPEC is met, not just the checklist).
-3. review-gate confirmed criticals/majors: zero open.
+2. Every AC executed in the terminating session with journaled evidence — no "passed earlier". STATE `goalGap` is empty (the goal check agrees the SPEC is met, not just the checklist).
+3. review-gate confirmed criticals/majors: zero open. Unjudged findings (skeptic quorum failures): re-refuted once, and anything still unjudged is listed in the summary as an unverified flag — never silently dropped. `converged: false` (round cap hit) is disclosed.
 4. Fresh clone sanity: `git status` clean; install + build from scratch succeeds (catches "works on my tree" artifacts: missing files, uncommitted deps).
 5. Summary tells the user how to run it in ≤3 commands.
 

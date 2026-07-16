@@ -33,15 +33,18 @@ Every task MUST have a files: glob and a RUNNABLE verify: command. Small atomic 
 Learned rules from past runs (honor them):\n${args.brain || 'none yet'}
 SPEC:\n${args.spec}`, { label: `propose:${a}`, phase: 'Propose', schema: PROPOSAL })))).filter(Boolean)
 phase('Judge')
-const scores = (await parallel(proposals.map((p, i) => () =>
+if (!proposals.length) return null  // all proposers died — orchestrator retries once, else degrades to a single direct plan
+const rawScores = await parallel(proposals.map((p, i) => () =>
   agent(`Score this plan 0-10 on: shippability, verifiability of tasks, risk. Return JSON.
 PLAN ${i}: ${JSON.stringify(p)}`, { label: `judge:${i}`, phase: 'Judge',
-    schema: { type: 'object', required: ['score', 'critique'], properties: { score: { type: 'number' }, critique: { type: 'string' } } } })))).filter(Boolean)
+    schema: { type: 'object', required: ['score', 'critique'], properties: { score: { type: 'number' }, critique: { type: 'string' } } } })))
+const judged = proposals.map((p, i) => ({ p, s: rawScores[i] })).filter(x => x.s)  // zip BEFORE filtering — pairing survives a dead judge
 phase('Synthesize')
-const winner = proposals[scores.indexOf(scores.reduce((a, b) => (b.score > a.score ? b : a)))]
+if (!judged.length) log('all judges failed — synthesizing from proposal 0, unscored')
+const winner = judged.length ? judged.reduce((a, b) => (b.s.score > a.s.score ? b : a)).p : proposals[0]
 return await agent(`Synthesize the FINAL plan from the winner, grafting the best ideas and critiques from the others.
 For each task, optionally set "agent" to the best-fit specialist from this registry (omit if none fits): ${JSON.stringify(args.agentTypes)}
-WINNER: ${JSON.stringify(winner)}\nOTHERS+CRITIQUES: ${JSON.stringify({ proposals, scores })}`,
+WINNER: ${JSON.stringify(winner)}\nOTHERS+CRITIQUES: ${JSON.stringify({ proposals, scores: judged.map(x => x.s) })}`,
   { label: 'synthesize', phase: 'Synthesize', schema: PROPOSAL })
 ```
 
@@ -70,19 +73,20 @@ const VERDICT = { type: 'object', required: ['taskId', 'verdict', 'evidence'], p
 const results = await pipeline(args.tasks,
   t => agent(`Implement ONE task in ${args.projectDir}. Task ${t.id}: ${t.text}
 Touch ONLY paths matching: ${t.files}. NEVER touch package.json/lockfiles/shared config (pre-installed for you). ${args.runNotes}
-Write real tests where the task implies them. Run \`${t.verify}\` yourself until it passes.
+Write real tests where the task implies them. Run the FILE-SCOPED check \`${t.verify}\` yourself until it passes.
+NEVER run the global build or full test suite — sibling agents are editing other areas of this same tree concurrently; the orchestrator runs global checks after the whole batch lands.
 LESSONS (obey):\n${args.lessons}\nSPEC context:\n${args.spec}
 Return JSON only.`, { label: `impl:${t.id}`, phase: 'Implement', schema: IMPL, ...(t.agent ? { agentType: t.agent } : {}) }),
   (impl, t) => impl && impl.status === 'done'
     ? agent(`Adversarially verify task ${t.id} in ${args.projectDir} — try to REFUTE completion.
-Read the changed files (${JSON.stringify(impl.filesTouched)}), run \`${t.verify}\`, probe edge cases the tests miss.
+Read the changed files (${JSON.stringify(impl.filesTouched)}), run \`${t.verify}\` (file-scoped only — never the global build/suite; siblings are editing this tree), probe edge cases the tests miss.
 Claimed: ${impl.summary}. Return JSON only.`, { label: `verify:${t.id}`, phase: 'Verify', schema: VERDICT, ...(args.verifyAgent ? { agentType: args.verifyAgent } : {}) })
         .then(v => ({ impl, verdict: v }))
     : { impl, verdict: null })
-return { results: results.filter(Boolean) }
+return { results: results.filter(Boolean), batchTaskIds: args.tasks.map(t => t.id) }
 ```
 
-Orchestrator treatment of results: `verdict.pass` is still only a claim — re-run every `verify:` + build yourself (iteration-engine §5). `insight` fields worth keeping go to LESSONS.md.
+Orchestrator treatment of results: a passing verdict (`verdict.verdict === 'pass'`) is still only a claim — re-run every `verify:` + the global build yourself (iteration-engine §5). Diff `batchTaskIds` against `results[].impl.taskId`: any batch task with no result, or `impl` null, is **agent-errored** — requeue it (it is NOT a red implementation; iteration-engine §5). `insight` fields worth keeping go to LESSONS.md.
 
 ## §3 review-gate (termination)
 
@@ -108,26 +112,33 @@ const LENSES = [
   { key: 'security', hint: 'injection, authz, secrets', agent: LA.security },
   { key: 'gaps', hint: 'acceptance-criteria gaps vs the SPEC', agent: LA.gaps },
 ]
-const seen = new Set(), confirmed = []
-let dry = 0
-while (dry < 2) {
+const seen = new Set(), confirmed = [], unjudged = []
+const keyOf = f => `${f.file}:${f.line || 0}:${f.severity}`  // structural key — prose summaries get rephrased every round
+const MAX_ROUNDS = 5  // hard cap: LLM finders rephrase forever; the cap, not convergence, bounds cost
+let dry = 0, round = 0
+while (dry < 2 && round++ < MAX_ROUNDS) {
   const found = (await parallel(LENSES.map(l => () =>
     agent(`Review the app at ${args.projectDir} through the lens: ${l.key} (${l.hint}). SPEC:\n${args.spec}\nReport real defects only.`,
       { label: `find:${l.key}`, phase: 'Find', schema: BUGS, ...(l.agent ? { agentType: l.agent } : {}) })))).filter(Boolean).flatMap(r => r.findings)
-  const fresh = found.filter(f => !seen.has(`${f.file}:${f.summary}`))
+  const fresh = found.filter(f => !seen.has(keyOf(f)))
   if (!fresh.length) { dry++; continue }
-  dry = 0; fresh.forEach(f => seen.add(`${f.file}:${f.summary}`))
+  dry = 0; fresh.forEach(f => seen.add(keyOf(f)))
   const judged = await parallel(fresh.map(f => () =>
     parallel([0, 1, 2].map(k => () =>
       agent(`Try to REFUTE this finding (default refuted=true if uncertain). ${JSON.stringify(f)} — project ${args.projectDir}, skeptic #${k}.`,
         { label: `refute:${f.file}`, phase: 'Refute', schema: VERDICT })))
-      .then(vs => ({ f, real: vs.filter(Boolean).filter(v => !v.refuted).length >= 2 }))))
+      .then(vs => {
+        const alive = vs.filter(Boolean)
+        if (alive.length < 2) return { f, unjudged: true }                       // quorum failure ≠ refuted — never silently drop
+        return { f, real: alive.filter(v => !v.refuted).length > alive.length / 2 }  // majority of SURVIVORS, not an absolute count
+      })))
   confirmed.push(...judged.filter(Boolean).filter(j => j.real).map(j => j.f))
+  unjudged.push(...judged.filter(Boolean).filter(j => j.unjudged).map(j => j.f))
 }
-return { confirmed }
+return { confirmed, unjudged, converged: dry >= 2 }
 ```
 
-Confirmed criticals/majors become ONE final fix batch through build-iteration; minors go to the summary as known nits.
+Confirmed criticals/majors become ONE final fix batch through build-iteration; minors go to the summary as known nits. **`unjudged` findings (skeptic quorum failed) are re-refuted once by the orchestrator; still unjudged → they appear in the final summary as unverified flags, never silently dropped.** `converged: false` (round cap hit) is reported in the summary — the review ran out of rounds, not out of findings.
 
 ## §4 Budget guard
 
