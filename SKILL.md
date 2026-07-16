@@ -19,11 +19,18 @@ One invocation → SPEC → PLAN → **one approval** → autonomous iterations 
 | Invocation | Mode |
 |---|---|
 | `/app-forge "<idea or spec path>" [in <dir>]` | **Bootstrap** — no `.forge/` at target |
+| `/app-forge "<idea>" in <dir> watch` | Bootstrap, then run **cycle 1 foreground-narrated** (trust-building); autonomous from cycle 2 |
 | `/app-forge <dir>` | **Run** — continue the loop (`.forge/STATE.json` exists) |
 | `/app-forge status <dir>` | Report state + journal tail; do no work |
 | `/app-forge stop <dir>` | Graceful stop → update RESUME.md, `ScheduleWakeup {stop:true}` |
 
 Detection rule: target has `.forge/STATE.json` → run mode; else bootstrap. Read references/state-contract.md before any read/write of `.forge/`.
+
+## When not to loop (be honest at intake)
+
+- **One-off, single-answer job** → a plain prompt/agent is faster; loops earn their setup cost on many-piece work.
+- **No measurable finish line** ("make something better") → vague work doesn't loop. Sharpen it into bars at bootstrap or decline — never start the loop on a vague SPEC.
+- **Cost sensitivity** → a self-checking loop runs agents several times per item. Say so up front; set `iterationCap`/budget to match.
 
 ## Hard rules (non-negotiable)
 
@@ -37,12 +44,12 @@ Detection rule: target has `.forge/STATE.json` → run mode; else bootstrap. Rea
 
 ## Bootstrap (iteration 0)
 
-1. Distill the idea (or read the given spec file) → write `.forge/SPEC.md` from templates/SPEC.template.md — goals, non-goals, stack (one-line justification), and **acceptance criteria: each one a runnable command or observable browser check** (references/verification.md §1).
+1. Distill the idea (or read the given spec file) → write `.forge/SPEC.md` from templates/SPEC.template.md — goals, non-goals, stack (one-line justification), and **acceptance criteria: each one a runnable command or observable browser check** (references/verification.md §1). **The bar rule:** every goal gets a bar the loop can measure; a vague idea is sharpened here (or asked about at the gate) — never looped as-is.
 2. **Discover the agent registry** (references/agent-routing.md §1): map task kinds → the specialist agent types actually available this session; store in STATE.json `agents`.
 3. Run the **plan-forge Workflow** (references/workflows.md §1) with the discovered `agentTypes`: 3 independent architecture+phasing proposals → judge panel → synthesis (tasks come back with `agent:` hints).
 4. Write `.forge/PLAN.md` from templates/PLAN.template.md: phases → atomic tasks, each annotated `files:` `needs:` `verify:` (+ optional `agent:`, validated against the registry).
 5. **THE GATE:** present SPEC + PLAN via AskUserQuestion (approve / tweak / re-plan). If the dialog is unavailable or dismissed, end the turn asking for approval in chat — bootstrap is the one place waiting is correct.
-6. On approval: `git init` if needed → commit `forge: bootstrap — spec + plan` → write STATE.json (templates/STATE.template.json), RESUME.md, empty JOURNAL.md + LESSONS.md → enter run mode immediately.
+6. On approval: `git init` if needed → commit `forge: bootstrap — spec + plan` → write STATE.json (templates/STATE.template.json), RESUME.md, empty JOURNAL.md + LESSONS.md → enter run mode immediately. (**watch mode:** run cycle 1 in-turn, narrating each step as it happens; go autonomous from cycle 2.)
 
 ## Run mode — one wake = one cycle
 
@@ -57,7 +64,8 @@ Full mechanics: references/iteration-engine.md. The shape:
 7. **Process completion**: verify YOURSELF — build + affected tests; at phase end add full suite + browser smoke (references/verification.md §3).
    - **Green** → check off tasks in PLAN.md, commit `forge: i<N> — <task ids> [green]`, journal with evidence, `iteration++`, reset `consecutiveNoProgress`, clear runId.
    - **Red** → ONE bounded fix pass (inline if small; fix workflow if not). Still red → journal the failure, `consecutiveNoProgress++`, track the error signature; 3× same signature → mark the task `[blocked: <sig>]` in PLAN.md and move on.
-8. **Loop or terminate**: unchecked tasks remain and breaker is clear → step 3 in the SAME turn. All tasks done (or only blocked ones left) → termination sequence.
+8. **Goal check — the second look**: after a green cycle, step back from tasks to the SPEC: *are we at the goal yet? What's the single biggest gap?* Record it as `goalGap` in STATE.json + the journal. A real gap no remaining task covers becomes a new `[gap]` task in PLAN.md (same grammar, needs a `verify:`). This beat steers the loop — checking tasks proves work; checking the goal aims it.
+9. **Loop or terminate**: unchecked tasks remain and breaker is clear → step 3 in the SAME turn (gap tasks first). All tasks done (or only blocked ones left) and `goalGap` empty → termination sequence.
 
 ## Termination — the proof, not the vibe
 

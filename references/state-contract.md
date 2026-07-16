@@ -27,6 +27,7 @@ Everything the loop knows lives on disk in the target project. Any fresh context
 Rules:
 - Every task has a stable id (`P<phase>.<n>`), a `files:` glob (drives disjoint batching), optional `needs:` (task ids), optional `agent:` (specialist routing hint, see agent-routing.md §4), and a **runnable** `verify:` command. A task without `verify:` is invalid — fix the plan before executing it.
 - `[blocked: <signature>]` suffix marks circuit-broken tasks. Blocked ≠ checked.
+- `[gap]` prefix in the task text marks tasks inserted by the goal check (iteration-engine.md §5a) — same grammar, selected first.
 - Checking off a task is done ONLY by the orchestrator after ITS OWN verification passes (Hard rule 2).
 - Phases carry a `[phase-verify: <command>]` run when the last task of the phase goes green, plus browser smoke for web apps.
 
@@ -46,6 +47,7 @@ Rules:
   "consecutiveNoProgress": 0,
   "errorSignatures": { "jwt-lib-esm-error": 3 },
   "agents": { "ui": "designer", "tests": "test-engineer", "verify": "code-reviewer", "security": "security-reviewer" },
+  "goalGap": null,
   "activeWorkflowRunId": null,
   "lastCheckpoint": "a1b2c3d",
   "stopReason": null
@@ -56,6 +58,7 @@ Rules:
 - `activeWorkflowRunId`: set when a build-iteration Workflow is launched; cleared after its results are processed. This is how a wake knows whether work is already in flight — never launch a second workflow while one is set (check it first; see iteration-engine.md §2).
 - `errorSignatures`: short slugs of repeated failures (first line of the error, normalized). Used for the same-error-3× breaker.
 - `agents`: the routing map discovered from this session's agent registry (agent-routing.md §1) — kinds → available specialist types. Re-validate on a fresh session; registries differ.
+- `goalGap`: the goal check's current answer to "what's the single biggest gap between the app and the SPEC?" (`null` = at goal so far). Steers the next cycle's batch; termination requires it empty.
 - Overwrite the whole file atomically each cycle (write temp + `mv`). It must always parse.
 
 ## JOURNAL.md entry format

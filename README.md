@@ -23,6 +23,18 @@ done ──▶ TERMINATION: every acceptance criterion executed with logged evid
 
 The engine is a self-pacing loop: background-workflow completion re-invokes the session (primary wake signal); a ScheduleWakeup heartbeat is the fallback. No polling, no busy-waiting.
 
+## The five beats
+
+Every real loop has the same anatomy, and App-Forge implements all five — with a decision-maker inside:
+
+1. **Find the work** — the next file-disjoint batch from `PLAN.md`.
+2. **Do it** — specialist agents, one task each, in parallel.
+3. **Check itself** — adversarial verifiers, then the orchestrator re-runs every check; plus a **goal check** each cycle that asks "are we at the SPEC yet — what's the biggest gap?" and feeds the answer into the next batch.
+4. **Remember** — `.forge/` state + journal + git checkpoints; no run ever starts from zero or repeats finished work.
+5. **Go again** — until every acceptance criterion is proven and the goal gap is empty; then it stops and tells you.
+
+And the honest inverse — **when not to loop**: one-off tasks (a prompt is faster), vague goals ("make it better" has no bar to measure), and budget-tight work (self-checking loops run agents several times per item).
+
 ## Why it's reliable
 
 - **The disk is the truth.** All loop state lives in `.forge/` + git checkpoints in your project. Sessions can die, contexts can be summarized — any fresh session resumes with `/app-forge <dir>`.
@@ -49,6 +61,7 @@ Restart Claude Code (or start a new session) — `/app-forge` appears in your sk
 | Command | What it does |
 |---|---|
 | `/app-forge "<idea>" in <dir>` | Bootstrap: spec → plan → your approval → loop starts |
+| `/app-forge "<idea>" in <dir> watch` | Same, but cycle 1 runs narrated in front of you — trust it first, then it goes autonomous |
 | `/app-forge <dir>` | Continue/resume the loop (any session, any time) |
 | `/app-forge status <dir>` | Where it stands — no work performed |
 | `/app-forge stop <dir>` | Graceful stop with resume instructions |
@@ -70,4 +83,4 @@ templates/                     SPEC · PLAN · RESUME · STATE
 ```
 
 ---
-Built by [Eskapeum](https://github.com/Eskapeum). Current version: see [CHANGELOG.md](CHANGELOG.md).
+Built by [Eskapeum](https://github.com/Eskapeum). MIT licensed — see [LICENSE](LICENSE). Current version: see [CHANGELOG.md](CHANGELOG.md).

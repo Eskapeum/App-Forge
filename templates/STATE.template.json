@@ -10,6 +10,7 @@
   "heartbeatSeconds": 1800,
   "consecutiveNoProgress": 0,
   "errorSignatures": {},
+  "goalGap": null,
   "activeWorkflowRunId": null,
   "lastCheckpoint": null,
   "stopReason": null

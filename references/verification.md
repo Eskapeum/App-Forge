@@ -13,6 +13,8 @@ Each AC in SPEC.md must be one of exactly two kinds:
 
 Ban list: "works well", "clean code", "good UX", "handles errors gracefully" — rewrite as a runnable/observable check or delete. 4–8 ACs is the sweet spot; if you need more, the SPEC is two apps.
 
+**The bar rule.** A loop only self-corrects on what it can measure — so give every goal a bar. The canonical non-code example: "write a brief" loops forever on vibes, but "every claim needs ≥3 sources and every link must open to a real page that backs the claim" makes the loop open each link, throw out fakes, and stop only when true. App-forge equivalents: not "auth works" but "`npm test -- auth` green + smoke: wrong password rejected, session persists across reload". If a goal has no bar, the bootstrap hasn't finished its job.
+
 ## §2 Who verifies
 
 | Layer | What it's worth |
@@ -48,7 +50,7 @@ If you can't paste what a check printed, you didn't run it.
 ## §5 Termination checklist (all YES before "shipped")
 
 1. Every PLAN task checked or explicitly `[blocked:]` (blocked list appears in the summary — never silently dropped).
-2. Every AC executed THIS session-day with journaled evidence — no "passed earlier".
+2. Every AC executed THIS session-day with journaled evidence — no "passed earlier". STATE `goalGap` is empty (the goal check agrees the SPEC is met, not just the checklist).
 3. review-gate confirmed criticals/majors: zero open.
 4. Fresh clone sanity: `git status` clean; install + build from scratch succeeds (catches "works on my tree" artifacts: missing files, uncommitted deps).
 5. Summary tells the user how to run it in ≤3 commands.

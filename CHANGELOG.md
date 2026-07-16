@@ -1,5 +1,15 @@
 # App-Forge — Changelog
 
+## 0.3.0 — 2026-07-16
+
+Loop-engineering hardening (the five-beats discipline) + MIT license.
+
+- **Goal check (new beat)** — after every green cycle the orchestrator steps back from tasks to the SPEC: "at goal yet? biggest gap?" → `goalGap` in STATE.json; uncovered gaps become `[gap]` tasks (selected first). Termination now requires tasks done AND goal gap empty — finishing the checklist while missing the goal no longer counts as done.
+- **The bar rule** — bootstrap must give every goal a measurable bar (verification.md §1); vague ideas are sharpened or declined, never looped.
+- **Watch mode** — `/app-forge "<idea>" in <dir> watch`: cycle 1 runs foreground-narrated for trust-building; autonomous from cycle 2.
+- **When-not-to-loop intake honesty** — one-off jobs, vague goals, cost sensitivity (SKILL.md section).
+- LICENSE: MIT. README: five-beats section, watch-mode row, license line.
+
 ## 0.2.0 — 2026-07-16
 
 Agent-ecosystem routing: fan-outs go to the best available **specialist** agents instead of generic subagents.
