@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "project": "<name>",
+  "createdAt": "<ISO timestamp>",
+  "status": "running",
+  "phase": "P1",
+  "iteration": 0,
+  "batchSize": 4,
+  "iterationCap": 50,
+  "heartbeatSeconds": 1800,
+  "consecutiveNoProgress": 0,
+  "errorSignatures": {},
+  "activeWorkflowRunId": null,
+  "lastCheckpoint": null,
+  "stopReason": null
+}
